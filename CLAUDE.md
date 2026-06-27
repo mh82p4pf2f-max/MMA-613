@@ -194,6 +194,9 @@ Full detail and limitations: `Knowledge/metadata/data_sources.md`. Scoring weigh
   **medium**; connecting low-income (0.15) + housing (0.10) would lift it toward **high**.
 - **Integration rules and known mismatches** (frequency, join keys, suppressed cells, proxy
   labels): `Knowledge/metadata/integration_notes.md`.
+- **Background context (not data):** `Knowledge/reference/` holds quarantined policy synthesis —
+  narrative context only; **never a source, value, scoring input, or city/eligibility claim** (see
+  its firewall `README`).
 
 ---
 
@@ -242,48 +245,51 @@ per flag), AI Council review status, and caveats/limitations.
 
 ## Agentic workspace
 
-The agentic workspace is *how* the dashboard is built and operated, not a layer inside it.
+The agentic workspace is *how* the dashboard is built and operated, not a layer inside it. As of
+2026-06-27 the operating skills are consolidated into **three capabilities**, each kept in its
+**simplest form** — deterministic math = native code, a governed judgement = skill, independent eyes
+= subagent, external data = connector. Old→new map and adoption notes: `docs/skills-consolidation.md`.
 
-**Pipeline (`Knowledge/src/` + notebooks):**
+**Capability 1 — Briefing Writer** — *skill* (`.claude/skills/briefing-writer/`). Turns the scored
+panel into the governed read: **owner mode** (one-page cycle brief — top areas, drivers, confidence,
+source, caveats) and **peer mode** (adds robustness, blind spots, review status). Merges the former
+`cycle-briefing-writer` + `peer-briefing-builder`.
 
-| Component | Purpose | Status |
-|---|---|---|
-| `statcan_api.py` | Wires the StatCan source tables via the WDS API; flags suppressed/missing cells | connected (LFS); others pending networked download |
-| `data_cleaning.py` | Cleans + integrates raw tables into tidy features | connected |
-| `scoring.py` | Computes the 0–100 `policy_review_priority_score`, `confidence_flag`, `score_explanation` | connected |
-| `sensitivity.py` | Re-scores the panel under perturbed weights to test whether a ranking holds; reports flip thresholds. Reuses `scoring.py`, never edits it or the panel | connected |
-| `verify.py` | Recompute oracle: re-derives every score/confidence/flag via `scoring.add_scores()`, diffs vs the stored panel, and enforces the band + NaN-suppression automatic-fails. Read-only | connected |
-| notebooks `00`–`05` | setup → download → clean → explore → score → dashboard exports | connected (run on a networked machine for the pending tables) |
+**Capability 2 — Scoring & Assurance Engine** — *native code + one subagent, fed by the StatCan
+connector*. Produce **and prove** the numbers. **Not a skill** — the score must compute identically
+every run. Full spec: `Knowledge/src/ENGINE.md`.
 
-**Skills (`.claude/skills/`)** — reach for these rather than prompting from scratch:
+| Component | Form | Purpose | Status |
+|---|---|---|---|
+| `statcan_api.py` | connector | Wire StatCan WDS tables; flag suppressed/missing cells | connected (LFS); others pending |
+| `data_cleaning.py` | native | Clean + integrate raw tables into tidy features | connected |
+| `scoring.py` | native | 0–100 `policy_review_priority_score` + `confidence_flag` + `score_explanation` | connected |
+| `verify.py` | native | Recompute oracle: re-derive every score/flag, diff vs panel, enforce band + NaN automatic-fails. Read-only | connected |
+| `sensitivity.py` | native | Re-score under perturbed weights; report flip thresholds. Reuses `scoring.py` | connected |
+| `generate_synthetic_demo.py` | native | Deterministic synthetic demo panel (seed 616); writes only to `Knowledge/synthetic/` | connected |
+| `weight-sensitivity-analyst` | subagent | "Would the ranking change if reweighted?" — runs `sensitivity.py`, reports robustness. Read-only | connected |
 
-| Skill | When to use |
-|---|---|
-| `opportunity-framing` | Concept is drifting broad or feature-led; reframe from user + decision |
-| `claude-md-architect` | Spec needs updating after a pivot, new finding, or Day 3 revision |
-| `dashboard-product-designer` | Designing or revising dashboard views and information architecture |
-| `evaluation-designer` | Building the known-answer test suite or re-measuring after revision |
-| `deployment-log-writer` | Recording Use-week episodes in structured form |
-| `governance-risk-auditor` | Before demos, AI Council review, or any deployment decision |
-| `ai-council-reviewer` | Running the formal Council review; proposes Approve / Revisions / Do not deploy |
-| `source-grounding-checker` | Before slides or final submission — confirms every claim traces to a source |
-| `presentation-story-builder` | Organising the Day-4 capstone narrative |
-| `professor-defense-prep` | Stress-testing answers before the Q&A |
-| `cycle-briefing-writer` | The front door — turn the panel into the governed gold-case briefing (top area, drivers, confidence, source, caveats) each cycle |
-| `calculation-verifier` | Before any number is relied on — recompute scores/confidence via `verify.py` and confirm an output's figures match the panel (claims, not facts) |
-| `blind-spot-mapper` | Stating what the panel cannot carry (masking, un-built demographics, NaN income/housing, proxy) before peers ask — honours the reference firewall |
-| `reconciliation-logger` | A human contests a ranking with local knowledge; record model vs. human, what the data can/can't settle, and the disposition |
-| `peer-challenge-prep` | Defending a ranking to peers/owner/Council — challenge bank for weights, confidence, equity blind spots |
-| `peer-briefing-builder` | Building the recurring cycle briefing (the call → drivers → confidence → robustness → blind spots → review) |
+Notebooks `00`–`05` (setup → download → clean → explore → score → exports) drive this engine; run on
+a networked machine for the pending tables.
 
-**Subagents (`.claude/agents/`)** — read-only workers for the "defend" pass; both pull every number from the panel and never change the score:
+**Capability 3 — Governance & Defense** — *skill* (`.claude/skills/governance-and-defense/`) *+ one
+subagent*. Review, name limits, challenge, reconcile — four modes: **review** (AI Council governance
+review → Approve / revisions / decline), **blind-spots** (what the panel can't carry), **reconcile**
+(log a human's disagreement + disposition), **challenge-prep** (defend the call). Merges
+`ai-council-reviewer` + `blind-spot-mapper` + `reconciliation-logger` + `peer-challenge-prep` +
+`professor-defense-prep`. Subagent `red-team-ranking` argues the runner-up's case before a top area is
+named (read-only).
 
-| Subagent | When to use |
-|---|---|
-| `weight-sensitivity-analyst` | "Why these weights?" / "would the answer change if reweighted?" — runs `sensitivity.py` and reports robustness |
-| `red-team-ranking` | Before naming a top area — argue the strongest case for the runner-up and name what would change the call |
+**Support / build-time skills** (kept, but not one of the three product capabilities):
+`claude-md-architect`, `dashboard-product-designer`, `interface-design`, `evaluation-designer`,
+`deployment-log-writer`, `presentation-story-builder`, `opportunity-framing`,
+`governance-risk-auditor`, `source-grounding-checker`.
 
-Each skill/subagent earns its place by solving a concrete step. Do not build what already exists.
+**Superseded** (merged into the three; moved to `archive/skills-superseded/`):
+`cycle-briefing-writer`, `peer-briefing-builder`, `ai-council-reviewer`, `blind-spot-mapper`,
+`reconciliation-logger`, `peer-challenge-prep`, `professor-defense-prep`, `calculation-verifier`.
+
+Each capability earns its place by solving a concrete step. Do not build what already exists.
 
 ---
 
@@ -393,9 +399,15 @@ A full risk register (R1–R9) and the Council review packet are already drafted
   ranking to peers. Sensitivity verified on 2026-05 + 2009-06; it confirmed the income/housing
   weights are currently **inert** (NaN), so today's ranking rests on the LFS-backed weights only.
   These tools carry *"prototype — not reviewed"* like all outputs.
-- **Next build step:** rebuild the panel to score **age/gender intersections as their own rows**
-  (e.g. a "Youth 15–24, Alberta" row), so the headline gold example becomes live output rather than
-  a province row with youth as a driver.
+- **Skills consolidated (2026-06-27):** the operating skills + subagents collapsed into **three
+  capabilities** in their simplest form — Briefing Writer (skill), Scoring & Assurance Engine (native
+  + `weight-sensitivity-analyst` subagent), Governance & Defense (skill + `red-team-ranking` subagent).
+  Installed `briefing-writer` + `governance-and-defense`; 8 superseded skills moved to
+  `archive/skills-superseded/`; engine spec → `Knowledge/src/ENGINE.md`; map → `docs/skills-consolidation.md`.
+- **Next build step — the fully functional app:** build out `dashboard/app.py` on the synthetic demo
+  panel (the nine views, loud synthetic banner), wiring the three capabilities, with the **real**
+  governed panel still the authority via `verify.py`. Then rebuild the real panel to score age/gender
+  intersections as their own rows (e.g. "Youth 15–24, Alberta") so the gold case becomes live on real data.
 - **Evaluation + governance scaffolding is built and ready, only execution pending:** 8
   known-answer test cases (TC-01–08), a risk register (R1–R9), and the AI Council review packet all
   exist; the **baseline run and AI Council review have not yet been run** (prototype).
@@ -421,3 +433,4 @@ do**. Never overclaim what the data supports.
 | 2026-06-27 | **Implemented Council revisions #2 & #4.** `data_cleaning.py`: employment & participation change moved to **3-mo** windows (unemployment stays 12-mo); added **core (25–54)** and **older (55+)** unemployment driver columns (no 65+ — absent from source). Panel regenerated faithfully (headline rates unchanged, provenance preserved); `verify.py` re-PASSED all 6,655 rows. Top area (NL 2026-05) unchanged and its lead widened 11.1→16.5 pts, ranking more robust. Unscored age view → `policy_triage_panel_age_exploratory.csv`. Remaining: #1 reframe to labour-market distress, #3 download low-income + CPI-Shelter, #5 re-measure the 5 cases; anchors for emp/part may need recalibration for the shorter window. |
 | 2026-06-27 | Revision #1 (reframe to labour-market distress) applied across the dashboard mockup, `app.py`, and the bundled HTML; dashboard reviewed against the design skill (9 views verified rendering) + governed-language scan (clean). Council revisions now **3 of 5 done**. |
 | 2026-06-27 | **Synthetic demo data + dashboard demo mode.** Regenerated `Knowledge/synthetic/policy_triage_panel_SYNTHETIC.csv` (36,517 rows, geo×age×gender×month, 3-mo windows) with low-income/housing/income/population fully simulated — every row `is_synthetic`, every explanation tagged, mostly high confidence. `app.py` now shows the **synthetic demo only** (real-data toggle removed at owner direction so no view ever reads "pending"; loud `SYN_BANNER` on every page). Mockup income + affordability + demographic views filled with synthetic values — **no "data pending" anywhere**. **Real governed panel untouched and remains the authority** — it is verified via `verify.py` (still PASSES, pending columns still NaN) but is no longer surfaced in the app. Synthetic is illustrative only, never a real triage signal or program decision. |
+| 2026-06-27 | **Consolidated the agentic workspace into three capabilities** (simplest-form mix), ahead of building the fully functional app: Briefing Writer (skill — merges `cycle-briefing-writer` + `peer-briefing-builder`); Scoring & Assurance Engine (native `scoring`/`verify`/`sensitivity`/`data_cleaning`/`generate_synthetic_demo` + `weight-sensitivity-analyst` subagent — **not a skill**); Governance & Defense (skill — merges `ai-council-reviewer` + `blind-spot-mapper` + `reconciliation-logger` + `peer-challenge-prep` + `professor-defense-prep`; + `red-team-ranking` subagent). Installed two `SKILL.md`; moved 8 superseded skills to `archive/skills-superseded/`; engine spec → `Knowledge/src/ENGINE.md`; map → `docs/skills-consolidation.md`. Build-time scaffolding kept. Prototype — not Council-reviewed. |
