@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "00_course_artifacts/04_deliverable_mockup/html_mockup"],
+      "port": 8765
+    },
+    {
+      "name": "build-deliverable",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8766", "--directory", "00_course_artifacts/05_build"],
+      "port": 8766
+    }
+  ]
+}

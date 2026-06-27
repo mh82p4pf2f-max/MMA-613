@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.Rhistory
+
+# Claude local machine config (per-user, not shared)
+.claude/settings.local.json
+
+# ---------------------------------------------------------------------------
+# Large data files (exceed GitHub's 100MB per-file limit, or are regenerable).
+# Teammates regenerate these locally via Knowledge/src/statcan_api.py and the
+# 01-04 notebooks. The small governed panel IS committed (see below).
+# ---------------------------------------------------------------------------
+Knowledge/raw/labour_force/lfs_14100287_tidy.csv
+Knowledge/processed/labour_force_clean.csv
+Knowledge/synthetic/synthetic_statcan_long_2015_2026.csv
+
+# Catch-all guard for any other oversized raw dumps added later:
+Knowledge/raw/**/*.csv
+
+# NOTE — intentionally COMMITTED (small enough, needed by teammates/dashboard):
+#   Knowledge/processed/policy_triage_panel.csv          (~5 MB, governed authority)
+#   Knowledge/processed/policy_triage_panel_age_exploratory.csv  (~4 MB)
+#   Knowledge/synthetic/policy_triage_panel_SYNTHETIC.csv (~39 MB, dashboard demo)

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build — Capability Map &amp; One Built Capability (MMA 616)</title>
+<style>
+  :root{ --ink:#1c2733; --muted:#5b6b7b; --line:#dce3ea; --bg:#f5f7f9; --card:#fff;
+         --accent:#3b6ea5; --accent2:#2f5d8a; --warn:#a5673b; --warnbg:#fff6ec;
+         --good:#2f7d5b; --goodbg:#e7f3ec; --bad:#b4452f; --code:#10243a; }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:var(--bg)}
+  header{background:linear-gradient(135deg,#1c2733,#26384a);color:#fff;padding:30px 34px}
+  header h1{margin:0 0 6px;font-size:23px;letter-spacing:-.01em}
+  header p{margin:0;color:#b6c6d6;font-size:14px}
+  header .meta{margin-top:12px;font-size:12.5px;color:#8ea4b8}
+  main{max-width:980px;margin:0 auto;padding:8px 22px 60px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;
+          padding:22px 26px;margin:20px 0;box-shadow:0 1px 2px rgba(20,40,60,.03)}
+  h2{font-size:19px;margin:2px 0 4px;color:var(--ink)}
+  h2 .tag{font-size:12px;font-weight:700;color:#fff;background:var(--accent);
+          padding:3px 9px;border-radius:20px;vertical-align:middle;margin-right:10px;letter-spacing:.03em}
+  h3{font-size:15.5px;margin:20px 0 6px;color:var(--accent2)}
+  p.lead{color:var(--muted);margin:4px 0 14px;font-size:14.5px}
+  table{width:100%;border-collapse:collapse;font-size:13.6px;margin:8px 0}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;background:#fafbfc}
+  td.verb{font-weight:600;color:var(--ink)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .pill.native{background:#e7eef6;color:#2f5d8a}
+  .pill.skill{background:#e7f3ec;color:#1f6b46}
+  .pill.subagent{background:#f3e9f6;color:#74458a}
+  .pill.connector{background:#fdf0d9;color:#8a5a16}
+  .pill.med{background:#fdf0d9;color:#8a5a16}
+  .pill.ok{background:#dcefe4;color:#1f6b46}
+  code{background:#eef1f4;padding:1px 6px;border-radius:4px;font-size:12.7px;color:#10243a}
+  .callout{border-left:4px solid var(--accent);background:#f1f6fb;border-radius:8px;padding:14px 18px;margin:14px 0}
+  .callout.good{border-color:var(--good);background:var(--goodbg)}
+  .callout.warn{border-color:var(--warn);background:var(--warnbg)}
+  .brief{background:#10243a;color:#e7eef6;border-radius:10px;padding:18px 20px;font-size:14px;line-height:1.65}
+  .brief b{color:#fff}
+  pre{background:var(--code);color:#d6e3f0;border-radius:10px;padding:16px 18px;overflow-x:auto;
+      font:12.7px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:10px 0}
+  pre .g{color:#7fdca0}.pre .r{color:#ff9b87}pre .c{color:#7f93a8}pre .y{color:#ffd88a}
+  .check{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px}
+  .check .mark{flex:0 0 auto;font-weight:800;color:var(--good)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:740px){.grid2{grid-template-columns:1fr}}
+  .legend{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+  .legend .pill{margin-right:4px}
+  ul.tight{margin:6px 0;padding-left:20px}ul.tight li{margin:3px 0}
+  .foot{color:var(--muted);font-size:12.5px;text-align:center;margin-top:24px}
+  .kicker{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker" style="color:#7fb0e0">MMA 616 · Build</div>
+  <h1>Map the app's capabilities — then build one for real</h1>
+  <p>Labour-Market Distress &amp; Social Support Prioritization Dashboard — a governed triage tool.</p>
+  <div class="meta">Decision it supports: <b>which geography × group should the program owner focus on this cycle?</b>
+  · Triage signal only — never eligibility, benefits, or individual claims · Prototype (AI Council reviewed 2026-06-27, awaiting ratification)</div>
+</header>
+
+<main>
+
+<section>
+  <h2>The app in one line</h2>
+  <p class="lead">A program owner / policy lead can't scan every province and group at once. The dashboard sweeps
+  Statistics Canada labour-market data into a ranked, evidence-backed shortlist of areas to focus on — each with
+  drivers, confidence, source, and caveats. Claude does the sweep and drafts the read; <b>humans decide</b>, and an
+  AI Council reviews before anything is treated as decision-ready.</p>
+  <p class="lead" style="margin-bottom:0">The walking skeleton is the nine-view HTML mock
+  (<code>00_course_artifacts/04_deliverable_mockup/html_mockup/index.html</code>). Below we walk it screen by screen,
+  name the verbs, choose a form for each, then build one capability for real and prove it works.</p>
+</section>
+
+<!-- ===================== PART A.1 ===================== -->
+<section>
+  <h2><span class="tag">Part A · 1</span>Walk the skeleton — list the verbs</h2>
+  <p class="lead">One screen at a time. At each faked spot, what must the agent be able to <em>do</em>? Plain verbs only —
+  no tools named yet, so the list grows from what the app needs.</p>
+  <table>
+    <thead><tr><th style="width:32%">Screen (faked spot)</th><th>Verbs the agent must be able to do</th></tr></thead>
+    <tbody>
+      <tr><td class="verb">1 · Executive summary</td><td><b>Rank</b> areas by distress · <b>draft</b> a cycle briefing · <b>show</b> confidence</td></tr>
+      <tr><td class="verb">2 · Regional stress</td><td><b>Rank</b> provinces by score · <b>chart</b> the unemployment trend</td></tr>
+      <tr><td class="verb">3 · Demographic vulnerability</td><td><b>Break down</b> unemployment by age band · <b>compare</b> gender</td></tr>
+      <tr><td class="verb">4 · Income context</td><td><b>Pull</b> income / low-income figures · <b>label</b> them annual</td></tr>
+      <tr><td class="verb">5 · Affordability pressure</td><td><b>Pull</b> the shelter-cost signal · <b>label</b> it a proxy, not a measure</td></tr>
+      <tr><td class="verb">6 · Priority score</td><td><b>Compute</b> the 0–100 score · <b>explain</b> its drivers · <b>expose</b> the weights</td></tr>
+      <tr><td class="verb">7 · Evidence panel</td><td><b>Trace</b> every value to its source table · <b>verify</b> the number is right</td></tr>
+      <tr><td class="verb">8 · AI Council review</td><td><b>Show</b> governance status · <b>escalate</b> any score ≥ 70 for human review</td></tr>
+      <tr><td class="verb">9 · Caveats &amp; limitations</td><td><b>State</b> what the data can't carry · <b>flag</b> missing data (never invent) · <b>refuse</b> out-of-scope asks</td></tr>
+    </tbody>
+  </table>
+  <h3>Cross-cutting verbs the sweep also needs</h3>
+  <p class="lead" style="margin-bottom:0"><b>Clean &amp; integrate</b> raw tables · <b>test the ranking's robustness</b> to the weights ·
+  <b>argue the counter-case</b> · <b>reconcile</b> a human's disagreement · <b>prep</b> for tough peer questions ·
+  <b>generate</b> a fully-populated demo dataset.</p>
+</section>
+
+<!-- ===================== PART A.2 ===================== -->
+<section>
+  <h2><span class="tag">Part A · 2</span>Choose a form for each verb — the capability-to-form map</h2>
+  <p class="lead">For each verb, the simplest form that does the job. This paired list is the first half of the output.</p>
+  <p class="legend">Forms:
+    <span class="pill native">native action</span> code the agent runs ·
+    <span class="pill skill">skill</span> a governed procedure ·
+    <span class="pill subagent">subagent</span> an independent worker ·
+    <span class="pill connector">connector</span> an external data source</p>
+  <table>
+    <thead><tr><th style="width:42%">Verb</th><th style="width:20%">Form</th><th>Built as</th></tr></thead>
+    <tbody>
+      <tr><td class="verb">Pull StatCan source tables</td><td><span class="pill connector">connector</span></td><td>StatCan WDS API (<code>statcan_api.py</code>)</td></tr>
+      <tr><td class="verb">Clean &amp; integrate the tables</td><td><span class="pill native">native action</span></td><td><code>data_cleaning.py</code></td></tr>
+      <tr><td class="verb">Compute the 0–100 score</td><td><span class="pill native">native action</span></td><td><code>scoring.py</code></td></tr>
+      <tr><td class="verb">Rank areas &amp; draft the cycle briefing</td><td><span class="pill skill">skill</span></td><td><code>cycle-briefing-writer</code> ◀ built in Part B</td></tr>
+      <tr><td class="verb">Verify the numbers are right</td><td><span class="pill skill">skill</span> + <span class="pill native">native</span></td><td><code>calculation-verifier</code> + <code>verify.py</code></td></tr>
+      <tr><td class="verb">Test the ranking's robustness to weights</td><td><span class="pill subagent">subagent</span> + <span class="pill native">native</span></td><td><code>weight-sensitivity-analyst</code> + <code>sensitivity.py</code></td></tr>
+      <tr><td class="verb">Argue the counter-case</td><td><span class="pill subagent">subagent</span></td><td><code>red-team-ranking</code></td></tr>
+      <tr><td class="verb">State what the data can't carry</td><td><span class="pill skill">skill</span></td><td><code>blind-spot-mapper</code></td></tr>
+      <tr><td class="verb">Reconcile a human's disagreement</td><td><span class="pill skill">skill</span></td><td><code>reconciliation-logger</code></td></tr>
+      <tr><td class="verb">Prep for tough peer questions</td><td><span class="pill skill">skill</span></td><td><code>peer-challenge-prep</code></td></tr>
+      <tr><td class="verb">Build the recurring peer briefing</td><td><span class="pill skill">skill</span></td><td><code>peer-briefing-builder</code></td></tr>
+      <tr><td class="verb">Run the governance review</td><td><span class="pill skill">skill</span></td><td><code>ai-council-reviewer</code></td></tr>
+      <tr><td class="verb">Generate a fully-populated demo dataset</td><td><span class="pill native">native action</span></td><td><code>generate_synthetic_demo.py</code></td></tr>
+    </tbody>
+  </table>
+  <p class="legend" style="margin-top:12px">Why these forms: a <b>native action</b> when it's deterministic arithmetic we want
+  identical every run (scoring, cleaning); a <b>skill</b> when it's a repeatable governed procedure with rules to enforce
+  (briefings, verification, caveats); a <b>subagent</b> when it needs an independent set of eyes (robustness, the counter-case);
+  a <b>connector</b> for data that already exists outside the app (StatCan WDS) — configured, not hand-built.</p>
+</section>
+
+<!-- ===================== PART B.1 ===================== -->
+<section>
+  <h2><span class="tag">Part B · 1</span>Build one capability in its form</h2>
+  <p class="lead">Verb chosen: <b>“Rank areas &amp; draft the cycle briefing.”</b> Form: <span class="pill skill">skill</span>.
+  This is the app's front door — the everyday output the program owner opens for. It is packaged as a real skill, not pasted
+  into chat: <code>.claude/skills/cycle-briefing-writer/SKILL.md</code>.</p>
+
+  <h3>What the skill does (from <code>cycle-briefing-writer/SKILL.md</code>)</h3>
+  <p class="lead"><b>Purpose.</b> Turn the scored panel into the governed briefing that names the top <em>area to focus on</em>
+  this cycle and gives the owner enough to act on it or set it aside — decision first, with its own evidence and caveats.</p>
+  <p class="lead" style="margin-bottom:6px"><b>Procedure (what it always does):</b></p>
+  <ol class="tight">
+    <li><b>Rank the cycle.</b> Latest <code>ref_date</code>, province-level rows only (Canada is a baseline, not a focus area), sorted by <code>policy_review_priority_score</code>.</li>
+    <li><b>Name the call.</b> The top intersection — a province, with age/gender carried as <em>driver columns</em> (stated honestly; not a scored row until the panel rebuild).</li>
+    <li><b>Give the drivers</b> (2–3 top components, each with its panel value), <b>state confidence</b> (backed-weight share), and <b>cite the source</b> (LFS 14-10-0287-01).</li>
+    <li><b>Attach caveats</b> (province-level only; housing is a proxy; triage, not eligibility) and <b>escalate</b> if the top score ≥ 70 or a trend reversal appears.</li>
+    <li><b>Verify before relying</b> — hand the numbers to <code>calculation-verifier</code> (see Part B·4).</li>
+  </ol>
+  <p class="lead" style="margin-bottom:0"><b>Guardrails:</b> every number comes from the panel (never invented, never a NaN
+  filled); governed language only (<em>area to focus on, requires policy review, triage signal only</em>); <b>no city/CMA row</b>
+  (automatic fail); output carries <em>“prototype — not reviewed”</em> until the Council signs off.</p>
+</section>
+
+<!-- ===================== PART B.2 ===================== -->
+<section>
+  <h2><span class="tag">Part B · 2</span>Wire it in</h2>
+  <p class="lead">Installed in the project so the agent finds and runs it on its own — not pasted in chat.</p>
+  <pre>.claude/skills/
+  ├── cycle-briefing-writer/SKILL.md   ◀ the capability built here
+  ├── calculation-verifier/SKILL.md    (the verifier used in Part B·4)
+  ├── blind-spot-mapper/   reconciliation-logger/   peer-challenge-prep/   peer-briefing-builder/
+  └── ai-council-reviewer/  …
+.claude/agents/
+  ├── weight-sensitivity-analyst.md     red-team-ranking.md
+Knowledge/src/
+  └── scoring.py · verify.py · sensitivity.py · data_cleaning.py</pre>
+  <p class="lead" style="margin-bottom:0">Because the skill lives in <code>.claude/skills/</code> with a name and description,
+  the agent loads it automatically when a cycle briefing is asked for — the same way the other skills above are discovered.</p>
+</section>
+
+<!-- ===================== PART B.3 — sample output ===================== -->
+<section>
+  <h2><span class="tag">Part B · 3</span>What it produces — a real cycle briefing</h2>
+  <p class="lead">Fed the live panel for the latest cycle (<code>2026-05</code>), the skill produces this governed briefing in the
+  gold-case format. Every figure is drawn from <code>Knowledge/processed/policy_triage_panel.csv</code>:</p>
+  <div class="brief">
+    <b>Cycle 2026-05 — area to focus on</b><br>
+    <b>Newfoundland and Labrador — policy_review_priority_score 40.7 (confidence: medium).</b><br>
+    Top drivers: unemployment rate (9.6); youth unemployment (18.7); falling participation (−1.2 vs 3-mo avg).<br>
+    Confidence medium — 75% of score weight backed by data (low-income and housing inputs pending).
+    Source: LFS 14-10-0287-01. Ahead of Saskatchewan (24.2) by 16.5 points.<br>
+    <span style="color:#9fc0dd">Triage signal only — not an eligibility or benefit decision. Province-level; not a city or individual claim. Prototype — awaiting AI Council ratification.</span>
+  </div>
+  <p class="legend">Runners-up this cycle: Saskatchewan 24.2 · New Brunswick 21.8 · British Columbia 20.1 · Nova Scotia 20.0 (all medium confidence).</p>
+</section>
+
+<!-- ===================== PART B.4 — verify ===================== -->
+<section>
+  <h2><span class="tag">Part B · 4</span>Verify, don't just trust</h2>
+  <p class="lead">A skill reporting success is not the same as the right answer. We check the briefing's numbers against a case
+  whose correct result we already know — using a second capability built for exactly this, <code>calculation-verifier</code>
+  (backed by <code>verify.py</code>). This mirrors Kinquiry's codebook-guard running <code>validate.py</code> on an invented
+  column and exiting with an error.</p>
+
+  <h3>Check 1 — every stored number is recomputed, not trusted</h3>
+  <pre>$ python3 Knowledge/src/verify.py
+Recompute check — 6655 rows re-scored via scoring.add_scores():
+  <span class="g">PASS</span> score        : every stored value matches recomputation.
+  <span class="g">PASS</span> confidence   : every stored value matches recomputation.
+  <span class="g">PASS</span> flag         : every stored value matches recomputation.
+  <span class="g">PASS</span> confidence band : every confidence_flag matches its band.
+  <span class="g">PASS</span> suppression  : pending columns (low_income_rate, housing_pressure_proxy) remain NaN.
+
+Result: <span class="g">PASS — calculations verified.</span></pre>
+
+  <h3>Check 2 — the briefing's headline number matches the source</h3>
+  <pre>&gt;&gt;&gt; verify.lookup(panel, "Newfoundland and Labrador", "2026-05")
+{ policy_review_priority_score: <span class="y">40.7</span>, confidence_flag: 'medium', unemployment_rate: 9.6, ... }
+<span class="g">✓</span> matches the briefing exactly (40.7, medium) — the number is real, not asserted.</pre>
+
+  <h3>Check 3 — the known-error case (the proof it actually guards)</h3>
+  <pre>&gt;&gt;&gt; verify.lookup(panel, "Edmonton", "2026-05")
+{ 'found': <span class="y">False</span>, 'geo': 'Edmonton', 'ref_date': '2026-05' }
+<span class="g">✓</span> a city is NOT in the panel — so a briefing can never cite "Edmonton". The guard returns
+   not-found, exactly as a city row would be an automatic fail.</pre>
+
+  <div class="callout good">
+    <b>Behavior check, not a green status.</b> We knew the answers before running: NL must score 40.7/medium (it does), and
+    Edmonton must be unfindable because the connected data has no city granularity (it is). The capability produces the
+    result we specified — that is the proof it works.
+  </div>
+</section>
+
+<!-- ===================== Plain words ===================== -->
+<section>
+  <h2>In plain words — what we built and why it's trustworthy</h2>
+  <div class="grid2">
+    <div>
+      <h3>What the built capability does</h3>
+      <ul class="tight">
+        <li>Reads the scored panel and <b>names one place to look first</b> this cycle.</li>
+        <li>Shows <b>why</b> (the drivers), <b>how sure</b> (confidence), and <b>where it came from</b> (source).</li>
+        <li>Speaks <b>triage language only</b> and refuses city or eligibility claims.</li>
+        <li>Hands its numbers to a <b>separate verifier</b> before anyone relies on them.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Why we trust it</h3>
+      <ul class="tight">
+        <li>The score is <b>recomputed independently</b> — 6,655/6,655 rows match.</li>
+        <li>Missing inputs <b>lower confidence and stay NaN</b> — never invented.</li>
+        <li>A <b>known-error case</b> (Edmonton) is correctly blocked.</li>
+        <li>Robustness, the counter-case, and an AI Council review back it up.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout warn">
+    <b>Honesty note.</b> Income, low-income, housing and population are not yet downloaded, so on the real governed panel
+    confidence is capped at <b>medium</b> and those fields are flagged, never filled. A clearly-labelled
+    <b>synthetic demo dataset</b> populates every view for walkthroughs — it is illustrative only, never a real triage signal
+    or a program decision.
+  </div>
+</section>
+
+<div class="foot">
+  MMA 616 · Build deliverable · Labour-Market Distress &amp; Social Support Prioritization Dashboard ·
+  Prototype — AI Council reviewed 2026-06-27 (Approve with revisions), awaiting human ratification.
+</div>
+
+</main>
+</body>
+</html>

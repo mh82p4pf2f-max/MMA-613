@@ -1,0 +1,12 @@
+geo,ref_date,unemployment_rate,youth_unemployment_rate,employment_rate,participation_rate,unemp_change,policy_review_priority_score,score_confidence,confidence_flag
+Newfoundland and Labrador,2026-05,9.6,18.7,51.3,56.7,-0.4083333333333332,38.2,0.75,medium
+Saskatchewan,2026-05,6.2,13.2,62.6,66.8,0.8499999999999996,27.1,0.75,medium
+British Columbia,2026-05,6.8,15.3,60.5,64.9,0.4750000000000005,20.9,0.75,medium
+New Brunswick,2026-05,7.2,15.2,56.1,60.5,0.0750000000000001,20.8,0.75,medium
+Nova Scotia,2026-05,7.1,13.7,57.3,61.7,0.4749999999999996,20.0,0.75,medium
+Ontario,2026-05,7.0,15.3,60.2,64.7,-0.666666666666667,18.3,0.75,medium
+Alberta,2026-05,6.6,15.0,64.6,69.1,-0.4833333333333334,15.9,0.75,medium
+Canada,2026-05,6.6,13.4,60.7,65.0,-0.241666666666668,15.3,0.75,medium
+Prince Edward Island,2026-05,6.7,13.0,62.0,66.5,-1.3083333333333345,14.7,0.75,medium
+Quebec,2026-05,5.6,8.1,60.6,64.1,-0.0250000000000003,11.2,0.75,medium
+Manitoba,2026-05,5.5,11.4,63.1,66.8,-0.2583333333333337,8.7,0.75,medium
