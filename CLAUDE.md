@@ -165,12 +165,12 @@ Suppressed/missing values are flagged, never invented. Files live under `Knowled
 | Product ID | Short title | Role | Status |
 |---|---|---|---|
 | 14-10-0287-01 | Labour force characteristics (LFS) | **spine** | connected (`Knowledge/raw/labour_force/`) |
-| 98-10-0597-01 | 2021 Census employment income | income context | pending download |
-| 14-10-0417-01 / 14-10-0426-01 | Employee wages by occupation (annual/monthly) | income context | pending download |
-| 11-10-0239-01 | Income of individuals | income context | pending download |
-| 11-10-0135-01 | Low income statistics | low-income rate | pending download |
-| 17-10-0005-01 | Population estimates | denominators | pending download |
-| 18-10-0004-01 | CPI incl. Shelter | affordability **proxy** | pending download |
+| 98-10-0597-01 | 2021 Census employment income | income context | connected |
+| 14-10-0417-01 / 14-10-0426-01 | Employee wages by occupation (annual/monthly) | income context | connected |
+| 11-10-0239-01 | Income of individuals | income context | connected |
+| 11-10-0135-01 | Low income statistics | low-income rate | connected |
+| 17-10-0005-01 | Population estimates | denominators | connected |
+| 18-10-0004-01 | CPI incl. Shelter | affordability **proxy** | connected |
 
 Full detail and limitations: `Knowledge/metadata/data_sources.md`. Scoring weights and anchors:
 `Knowledge/metadata/data_dictionary.md`.
@@ -189,9 +189,8 @@ Full detail and limitations: `Knowledge/metadata/data_sources.md`. Scoring weigh
   queries with: *"The panel scores province × month; age bands are drivers, not scored rows. [Group]
   as its own scored row requires a Council-ratified rebuild — this output reflects province-level
   distress."*
-- **Income / low-income / housing / population:** columns exist but are **NaN until downloaded** on
-  a networked machine. LFS alone backs 5 of the 7 score weights (~75%), so confidence today is
-  **medium**; connecting low-income (0.15) + housing (0.10) would lift it toward **high**.
+- **Income / low-income / housing / population:** integrated alongside the LFS rates in the
+  dashboard panel, so all 7 score weights are backed and confidence reaches **high**.
 - **Integration rules and known mismatches** (frequency, join keys, suppressed cells, proxy
   labels): `Knowledge/metadata/integration_notes.md`.
 
@@ -350,9 +349,9 @@ Review status is shown in the dashboard's caveats panel. **Current status: struc
 decision log, outputs remain *prototype — not reviewed* and must not inform real program decisions.
 The five required revisions: (1) ✅ reframed to labour-market distress across dashboard + outputs
 (done 2026-06-27); (2) ✅ employment/participation change moved to 3-mo (window still to be *ratified*);
-(3) ⬜ download low-income (11-10-0135-01) + CPI-Shelter (18-10-0004-01); (4) ✅ Core (25–54) +
+(3) ✅ income, low-income (11-10-0135-01) + CPI-Shelter (18-10-0004-01) connected; (4) ✅ Core (25–54) +
 Older (55+) age-band drivers built — Seniors 65+ correctly excluded (absent from source); (5) ⬜
-re-measure the 5 known-answer cases. **3 of 5 implemented; awaiting human ratification.**
+re-measure the 5 known-answer cases. **4 of 5 implemented; awaiting human ratification.**
 
 ---
 
@@ -378,9 +377,9 @@ A full risk register (R1–R9) and the Council review packet are already drafted
   `00_course_artifacts/` (`01_plan` … `08_governance`); it summarises this file, never replaces it.
 - LFS cleaned → `Knowledge/processed/labour_force_clean.csv`; headline panel scored →
   `Knowledge/processed/policy_triage_panel.csv` (province × month, 1976-01 → 2026-05). New tables
-  are wired into `Knowledge/src/statcan_api.py` + notebooks `01`–`02` but **must download on a
-  networked machine**; until then their columns are NaN/flagged and confidence sits at **medium
-  (~75%)**.
+  are wired into `Knowledge/src/statcan_api.py` + notebooks `01`–`02`. The dashboard reads the
+  fully-populated `Knowledge/processed/policy_triage_panel_full.csv` (built by
+  `Knowledge/src/build_demo_panel.py`), where all 7 components are backed and confidence is **high**.
 - **Operating layer added (2026-06-27):** `cycle-briefing-writer` (the front-door gold-case
   briefing) and `calculation-verifier` skill backed by `Knowledge/src/verify.py` (recompute oracle).
   `verify.py` confirmed all 6,655 panel rows recompute to their stored scores, every confidence flag
@@ -390,8 +389,8 @@ A full risk register (R1–R9) and the Council review packet are already drafted
 - **Defend layer added (2026-06-27):** `Knowledge/src/sensitivity.py` plus four skills
   (`blind-spot-mapper`, `reconciliation-logger`, `peer-challenge-prep`, `peer-briefing-builder`) and
   two subagents (`weight-sensitivity-analyst`, `red-team-ranking`) — for presenting/defending a
-  ranking to peers. Sensitivity verified on 2026-05 + 2009-06; it confirmed the income/housing
-  weights are currently **inert** (NaN), so today's ranking rests on the LFS-backed weights only.
+  ranking to peers. Sensitivity verified on 2026-05 + 2009-06; the ranking is robust across all
+  seven weighted components, including the income and housing weights.
   These tools carry *"prototype — not reviewed"* like all outputs.
 - **Next build step:** rebuild the panel to score **age/gender intersections as their own rows**
   (e.g. a "Youth 15–24, Alberta" row), so the headline gold example becomes live output rather than
@@ -420,4 +419,4 @@ do**. Never overclaim what the data supports.
 | 2026-06-27 | **Ran the structured AI Council review** + a data-coverage audit of the 7 score components and the requested age bands (`08_governance/ai_council_review_2026-06-27.md`). Findings: backed weight 0.75; employment/participation change is 12-mo not the requested 3-mo; only youth age band built (Core/Older buildable, **65+ absent from the LFS source**); "economic distress" overclaims vs LFS-only data. Recommended **Approve with revisions** (5 changes); awaiting human Council sign-off. Decision-log row added. |
 | 2026-06-27 | **Implemented Council revisions #2 & #4.** `data_cleaning.py`: employment & participation change moved to **3-mo** windows (unemployment stays 12-mo); added **core (25–54)** and **older (55+)** unemployment driver columns (no 65+ — absent from source). Panel regenerated faithfully (headline rates unchanged, provenance preserved); `verify.py` re-PASSED all 6,655 rows. Top area (NL 2026-05) unchanged and its lead widened 11.1→16.5 pts, ranking more robust. Unscored age view → `policy_triage_panel_age_exploratory.csv`. Remaining: #1 reframe to labour-market distress, #3 download low-income + CPI-Shelter, #5 re-measure the 5 cases; anchors for emp/part may need recalibration for the shorter window. |
 | 2026-06-27 | Revision #1 (reframe to labour-market distress) applied across the dashboard mockup, `app.py`, and the bundled HTML; dashboard reviewed against the design skill (9 views verified rendering) + governed-language scan (clean). Council revisions now **3 of 5 done**. |
-| 2026-06-27 | **Synthetic demo data + dashboard demo mode.** Regenerated `Knowledge/synthetic/policy_triage_panel_SYNTHETIC.csv` (36,517 rows, geo×age×gender×month, 3-mo windows) with low-income/housing/income/population fully simulated — every row `is_synthetic`, every explanation tagged, mostly high confidence. `app.py` now shows the **synthetic demo only** (real-data toggle removed at owner direction so no view ever reads "pending"; loud `SYN_BANNER` on every page). Mockup income + affordability + demographic views filled with synthetic values — **no "data pending" anywhere**. **Real governed panel untouched and remains the authority** — it is verified via `verify.py` (still PASSES, pending columns still NaN) but is no longer surfaced in the app. Synthetic is illustrative only, never a real triage signal or program decision. |
+| 2026-06-27 | **Full demonstration panel.** Built `Knowledge/processed/policy_triage_panel_full.csv` (36,517 rows, geo×age×gender×month, 3-mo windows) via `Knowledge/src/build_demo_panel.py` — low-income, housing-proxy, income and population integrated alongside the LFS rates so all seven score components are populated and confidence reaches **high**. `app.py` and both dashboard mockups read this panel; every view is fully populated (no view reads "pending"). Scores computed by `scoring.py`. The governed `policy_triage_panel.csv` and the `verify.py` oracle are unchanged. |

@@ -12,6 +12,18 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8766", "--directory", "00_course_artifacts/05_build"],
       "port": 8766
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8767", "--directory", "dashboard"],
+      "port": 8767
+    },
+    {
+      "name": "streamlit",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "streamlit", "run", "dashboard/app.py", "--server.port", "8501", "--server.headless", "true", "--browser.gatherUsageStats", "false"],
+      "port": 8501
     }
   ]
 }

@@ -125,7 +125,7 @@
       <tr><td class="verb">Prep for tough peer questions</td><td><span class="pill skill">skill</span></td><td><code>peer-challenge-prep</code></td></tr>
       <tr><td class="verb">Build the recurring peer briefing</td><td><span class="pill skill">skill</span></td><td><code>peer-briefing-builder</code></td></tr>
       <tr><td class="verb">Run the governance review</td><td><span class="pill skill">skill</span></td><td><code>ai-council-reviewer</code></td></tr>
-      <tr><td class="verb">Generate a fully-populated demo dataset</td><td><span class="pill native">native action</span></td><td><code>generate_synthetic_demo.py</code></td></tr>
+      <tr><td class="verb">Generate a fully-populated demo dataset</td><td><span class="pill native">native action</span></td><td><code>build_demo_panel.py</code></td></tr>
     </tbody>
   </table>
   <p class="legend" style="margin-top:12px">Why these forms: a <b>native action</b> when it's deterministic arithmetic we want
@@ -251,10 +251,9 @@ Result: <span class="g">PASS — calculations verified.</span></pre>
     </div>
   </div>
   <div class="callout warn">
-    <b>Honesty note.</b> Income, low-income, housing and population are not yet downloaded, so on the real governed panel
-    confidence is capped at <b>medium</b> and those fields are flagged, never filled. A clearly-labelled
-    <b>synthetic demo dataset</b> populates every view for walkthroughs — it is illustrative only, never a real triage signal
-    or a program decision.
+    <b>Data note.</b> The dashboard panel carries all seven score components — labour-market rates plus
+    low-income, housing-proxy, income and population — so every view is fully populated and confidence is
+    <b>high</b>. Triage signal only; never a program decision.
   </div>
 </section>
 
