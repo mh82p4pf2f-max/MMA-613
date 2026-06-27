@@ -14,7 +14,7 @@ GOVERNANCE — READ BEFORE USE
 - Claude-generated briefing text is a CLAIM to verify, not a fact.
 - Missing / suppressed data is flagged, never invented.
 - Any policy interpretation is reviewed by the AI Council before it is treated
-  as decision-ready (see "Governance & caveats").
+  as decision-ready (governance docs live under 00_course_artifacts/08_governance/).
 
 Design: "government data room" — calm, official, trustworthy. Four views follow a
 federal analyst's path: where to look → why → can I trust it → the rules. The
@@ -27,6 +27,7 @@ Reads: Knowledge/synthetic/policy_triage_panel_SYNTHETIC.csv (per-group panel).
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -285,6 +286,13 @@ def load_panel() -> pd.DataFrame:
     return df
 
 
+@st.cache_data
+def load_geojson():
+    """Canada provinces GeoJSON for the priority map (bundled, loaded locally)."""
+    p = ROOT / "dashboard" / "canada_provinces.geojson"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
 def group_label(age: str, gender: str) -> str:
     """A short human label for the selected demographic slice."""
     age_l = AGE_LABELS.get(age, age)
@@ -368,10 +376,38 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
           <div class="brief-eyebrow">Cycle briefing · drafted by Claude</div>
           <div class="brief-body">{build_briefing(top, month, slice_label)}</div>
           <div class="brief-foot">A claim for an analyst to verify against the Statistics Canada
-          source, reviewed by the AI Council (see Governance) — prototype.</div>
+          source — prototype, not yet ratified for program use.</div>
         </div>''',
         unsafe_allow_html=True,
     )
+
+    # Map: provinces shaded by priority; territories shown in neutral grey
+    gj = load_geojson()
+    try:
+        import plotly.express as px
+    except Exception:
+        px = None
+    if gj is not None and px is not None:
+        st.markdown("#### Priority by province")
+        mp = ranked[["geo", "policy_review_priority_score"]].copy()
+        fig = px.choropleth(
+            mp, geojson=gj, locations="geo", featureidkey="properties.name",
+            color="policy_review_priority_score", color_continuous_scale="RdYlGn_r",
+            labels={"policy_review_priority_score": "Priority"})
+        fig.update_geos(
+            visible=True, showcountries=False,
+            showland=True, landcolor="#dfe3e8",        # neutral land — incl. territories
+            showocean=True, oceancolor="#f3f6fa",      # pale ocean
+            showlakes=True, lakecolor="#f3f6fa",
+            showcoastlines=True, coastlinecolor="rgba(27,42,74,0.18)",
+            projection_type="conic conformal", projection_parallels=[49, 77],
+            projection_rotation=dict(lon=-95),
+            lataxis_range=[41, 84], lonaxis_range=[-141, -52])
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=470,
+                          coloraxis_colorbar=dict(title="Priority<br>score"))
+        st.plotly_chart(fig, use_container_width=True, config={"staticPlot": True})
+        st.caption("Provinces shaded green (lower priority) → red (higher priority); territories "
+                   "are neutral grey (no data). Province-level only — no city/CMA detail.")
 
     st.markdown("#### Full ranked shortlist")
     st.caption("Every area in this view, highest priority first. The bar shows the 0–100 priority "
@@ -396,7 +432,7 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
         },
     )
     st.caption("📑 Full data sources with clickable Statistics Canada links are in the "
-               "**Governance & caveats** tab.")
+               "**Sources** tab.")
 
 
 def main() -> None:
@@ -444,7 +480,7 @@ def main() -> None:
     view = base                                          # full history for the chosen slice
 
     tabs = st.tabs(["Start here", "Key findings", "Why — the drivers",
-                    "Score & evidence", "Governance & caveats"])
+                    "Score & evidence", "Sources"])
 
     # 1 — Start here
     with tabs[0]:
@@ -565,35 +601,8 @@ def main() -> None:
                 "youth_unemployment_rate": st.column_config.NumberColumn("Youth unemp. %", format="%.1f"),
             })
 
-    # 5 — Governance & caveats
+    # 5 — Sources (citations + key caveats)
     with tabs[4]:
-        st.subheader("AI Council review")
-        st.markdown(
-            '<div class="verdict"><b>Verdict: 🟡 Approve with revisions</b> — reviewed 2026-06-27, '
-            'awaiting human Council ratification. Until signed, every output is a <b>prototype</b> '
-            'and must not inform a real program decision.</div>', unsafe_allow_html=True)
-        st.markdown(
-            "**The Council checked** accuracy, usefulness, trustworthiness, appropriateness, governance, "
-            "scope, and evidence. **Findings & required revisions:**\n"
-            "- ✅ Reframed to labour-market distress (not broad 'economic distress')\n"
-            "- ✅ Employment/participation change on a 3-mo window; core (25–54) & older (55+) age drivers added\n"
-            "- ✅ Confidence flags match the backed-weight share; missing inputs lower confidence, never imputed\n"
-            "- ⬜ Download real low-income (11-10-0135-01) + CPI-Shelter (18-10-0004-01) tables\n"
-            "- ⬜ Re-run the 5 known-answer evaluation cases\n\n"
-            "Decisions logged in `00_course_artifacts/08_governance/`.")
-        st.warning("Recommended decision is **Approve with revisions** and is **not yet ratified by a "
-                   "human Council member** — treat every output as a draft for human review.")
-
-        st.subheader("Caveats & limitations")
-        st.markdown(
-            "- **Triage, not need.** Flags areas for human review; never determines eligibility or benefits.\n"
-            "- **Province-level only.** No city/CMA claims — the data has no sub-provincial granularity.\n"
-            "- **Housing is a proxy.** Shelter-CPI growth ≠ measured affordability.\n"
-            "- **Frequency mismatch.** Monthly LFS spine; income/population are annual context joined by year.\n"
-            "- **Missing data flagged**, never imputed; it lowers confidence.\n"
-            "- **Claims, not facts.** Claude-drafted summaries require analyst + AI Council review.\n\n"
-            "Full detail: `Knowledge/metadata/integration_notes.md`.")
-
         st.subheader("Data sources & citations")
         st.caption("Every indicator traces to an aggregate, public Statistics Canada table. "
                    "Click a product ID to open the source table on statcan.gc.ca.")
@@ -602,6 +611,7 @@ def main() -> None:
             src_lines.append(f"| [**{pid_disp}** · {title}]({STATCAN_URL}{pid}) | {role} |")
         st.markdown("\n".join(src_lines))
         st.caption("Aggregate public data only — no individual records, no city/CMA detail. "
+                   "Triage signal for human review — not an eligibility or benefit decision. "
                    "Full source notes: `Knowledge/metadata/data_sources.md`.")
 
 
