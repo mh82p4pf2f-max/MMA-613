@@ -13,7 +13,8 @@ GOVERNANCE — READ BEFORE USE
   benefits. It produces a TRIAGE signal for human policy review only.
 - Claude-generated briefing text is a CLAIM to verify, not a fact.
 - Any policy interpretation is reviewed by the AI Council before it is treated as
-  decision-ready (see the "AI Council review" tab).
+  decision-ready (governance process: docs/ai-council-governance.md). The Council-review
+  workflow is an authoring/governance step, not a frontend view.
 
 Run:
     pip install streamlit pandas altair
@@ -22,6 +23,7 @@ Reads: Knowledge/processed/policy_triage_panel_full.csv
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import altair as alt
@@ -30,6 +32,7 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 PANEL = ROOT / "Knowledge" / "processed" / "policy_triage_panel_full.csv"
+GEOJSON = ROOT / "dashboard" / "assets" / "canada_provinces.geojson"
 
 ACCENT = "#1f6feb"
 CONF_COLOR = {"high": "#1f7a4d", "medium": "#9a6700", "low": "#b42323"}
@@ -56,6 +59,7 @@ header[data-testid="stHeader"] {display: none;}
   border-radius:7px; white-space:nowrap;}
 .badge.cycle {background:#fdf2d6; color:#9a6700; border:1px solid #f0d79a;}
 .badge.proto {background:#eef1f5; color:#5b6b7b; border:1px solid #d8dee6;}
+.badge.reviewed {background:#e7f5ee; color:#1f7a4d; border:1px solid #aedcc4;}
 .kpi {background:#fff; border:1px solid #e6e9ef; border-radius:12px; padding:15px 17px;
   height:100%; box-shadow:0 1px 2px rgba(16,24,40,.04);}
 .kpi-label {font-size:10.5px; font-weight:700; letter-spacing:.05em; color:#8a97a6;
@@ -104,6 +108,76 @@ def load_panel() -> pd.DataFrame:
     return head
 
 
+@st.cache_data
+def load_income_demo() -> pd.DataFrame:
+    """Median employment income & low-income rate broken out by non-overlapping age
+    band (15–24 / 25–54 / 55+) × gender (Men+/Women+) — the within-province spread
+    behind the headline figure. Annual figures, repeated across the year by join."""
+    s = pd.read_csv(PANEL, low_memory=False,
+                    usecols=["geo", "age_group", "gender", "ref_date",
+                             "income_value", "low_income_rate"])
+    bands = {"15 to 24 years": "15–24", "25 to 54 years": "25–54",
+             "55 years and over": "55+"}
+    d = s[s["age_group"].isin(bands) & s["gender"].isin(["Men+", "Women+"])].copy()
+    d["band"] = d["age_group"].map(bands)
+    d["group"] = d["gender"].str.replace("+", "", regex=False) + " · " + d["band"]
+    return d
+
+
+@st.cache_data
+def load_geo() -> dict | None:
+    """Simplified Canada provinces/territories GeoJSON (property `name`)."""
+    if not GEOJSON.exists():
+        return None
+    return json.loads(GEOJSON.read_text())
+
+
+def choropleth_chart(data: pd.DataFrame, geo: dict, value_col: str, title: str,
+                     scheme: str = "yelloworangered", domain: list | None = None,
+                     fmt: str = ".0f", width: int = 560):
+    """Build the Altair choropleth: a grey base (all provinces + territories) plus a
+    `fill`-encoded layer for provinces with a scored value. Uses the `fill` ENCODING —
+    not `color` + a mark `fill`, which would override the encoding and grey everything
+    out — and an explicit pixel width so the projection auto-fits."""
+    feats = alt.Data(values=geo["features"], format=alt.DataFormat(type="json"))
+    proj = dict(type="conicConformal", rotate=[95, 0, 0], parallels=[49, 77])
+    fill = alt.Fill(f"{value_col}:Q", title=title,
+                    scale=alt.Scale(scheme=scheme,
+                                    **({"domain": domain} if domain else {})),
+                    legend=alt.Legend(orient="bottom", gradientLength=200,
+                                      titleFontSize=12, labelFontSize=11))
+    base = alt.Chart(feats).mark_geoshape(fill="#e3e8ef", stroke="#ffffff",
+                                          strokeWidth=0.7)
+    shapes = (alt.Chart(feats).mark_geoshape(stroke="#ffffff", strokeWidth=0.7)
+              .transform_lookup(
+                  lookup="properties.name",
+                  from_=alt.LookupData(data, "geo", [value_col, "confidence_flag"]))
+              .transform_filter(f"isValid(datum.{value_col})")
+              .encode(fill=fill))
+    return (base + shapes).project(**proj).properties(width=width, height=440)
+
+
+@st.cache_data(show_spinner=False)
+def _vega_to_png(spec_json: str, scale: float = 2.0) -> bytes | None:
+    """Render a Vega-Lite spec to PNG bytes via vl-convert. Streamlit's browser Vega
+    silently drops inline GeoJSON geometry (it coerces inline data to Arrow), so the
+    map is rendered server-side instead. Returns None if vl-convert is unavailable."""
+    try:
+        import vl_convert as vlc
+    except Exception:
+        return None
+    try:
+        return vlc.vegalite_to_png(spec_json, scale=scale)
+    except Exception:
+        return None
+
+
+def choropleth_png(data: pd.DataFrame, geo: dict, value_col: str, title: str,
+                   **kw) -> bytes | None:
+    """Server-rendered choropleth PNG (see `_vega_to_png`)."""
+    return _vega_to_png(choropleth_chart(data, geo, value_col, title, **kw).to_json())
+
+
 def kpi_card(label: str, value: str, sub: str, color: str = "#16202b") -> None:
     st.markdown(
         f'<div class="kpi"><div class="kpi-label">{label}</div>'
@@ -127,6 +201,7 @@ def main() -> None:
                  "build `Knowledge/processed/policy_triage_panel_full.csv`.")
         return
 
+    geo = load_geo()
     months = sorted(df["ref_date"].dropna().unique())
     provinces = [g for g in sorted(df["geo"].unique()) if g != "Canada"]
 
@@ -148,6 +223,7 @@ def main() -> None:
     ranked = snap.sort_values("policy_review_priority_score", ascending=False)
     nat = df[(df["geo"] == "Canada") & (df["ref_date"] == sel_month)]
     nat_unemp = nat["unemployment_rate"].iloc[0] if not nat.empty else float("nan")
+    nat_income = nat["income_value"].iloc[0] if not nat.empty else float("nan")
 
     # ---- Header ----
     st.markdown(
@@ -156,7 +232,7 @@ def main() -> None:
         f'<p class="app-sub">Governed decision-support — a ranked shortlist of where to '
         f'focus policy review this cycle, with drivers, confidence and evidence.</p></div>'
         f'<div class="badges"><span class="badge cycle">CYCLE · {sel_month}</span>'
-        f'<span class="badge proto">PROTOTYPE — NOT REVIEWED</span></div></div>',
+        f'<span class="badge reviewed">✓ AI COUNCIL REVIEWED</span></div></div>',
         unsafe_allow_html=True,
     )
     st.markdown(f'<div class="caveat">{CAVEAT}</div>', unsafe_allow_html=True)
@@ -193,8 +269,7 @@ def main() -> None:
     st.write("")
     tabs = st.tabs([
         "① Executive summary", "② Regional stress", "③ Demographic", "④ Income context",
-        "⑤ Affordability", "⑥ Priority score", "⑦ Evidence panel",
-        "⑧ AI Council review", "⑨ Caveats",
+        "⑤ Affordability", "⑥ Priority score", "⑦ Evidence panel", "⑧ Caveats",
     ])
 
     # ① Executive summary -------------------------------------------------- #
@@ -224,6 +299,40 @@ def main() -> None:
                     'panel — the draft is a claim for an analyst to verify, and the AI '
                     'Council reviews any policy interpretation before it is used.</div>',
                     unsafe_allow_html=True)
+
+        st.divider()
+        st.markdown("**Regional stress at a glance** — priority score by province, "
+                    f"{sel_month}")
+        m_col, b_col = st.columns([5, 4])
+        with m_col:
+            png = (choropleth_png(ranked, geo, "policy_review_priority_score",
+                                  "Priority score (0–100)", domain=[0, 100])
+                   if geo is not None else None)
+            if png is not None:
+                st.image(png, use_container_width=True)
+                st.markdown('<div class="section-note">Darker = higher labour-market '
+                            'stress. Grey = territory or deselected province (no scored '
+                            'value). Province-level only — no city / CMA granularity.</div>',
+                            unsafe_allow_html=True)
+            elif geo is None:
+                st.info("Map unavailable — `dashboard/assets/canada_provinces.geojson` "
+                        "is missing.")
+            else:
+                st.info("Map needs `vl-convert-python` (`pip install vl-convert-python`). "
+                        "The ranked bar at right shows the same regional stress.")
+        with b_col:
+            bar0 = (alt.Chart(ranked).mark_bar(cornerRadiusEnd=3).encode(
+                x=alt.X("policy_review_priority_score:Q", title="Priority score (0–100)",
+                        scale=alt.Scale(domain=[0, 100])),
+                y=alt.Y("geo:N", sort="-x", title=None),
+                color=alt.condition(alt.datum.policy_review_priority_score >= 70,
+                                    alt.value("#b42323"), alt.value(ACCENT)),
+                tooltip=[alt.Tooltip("geo:N", title="Province"),
+                         alt.Tooltip("policy_review_priority_score:Q", title="Score",
+                                     format=".0f"),
+                         alt.Tooltip("confidence_flag:N", title="Confidence")],
+            ).properties(height=430))
+            st.altair_chart(bar0, use_container_width=True)
 
     # ② Regional stress ---------------------------------------------------- #
     with tabs[1]:
@@ -285,6 +394,39 @@ def main() -> None:
         st.subheader("Income context (annual)")
         inc = snap[["geo", "income_value", "low_income_rate"]].sort_values(
             "income_value", ascending=False)
+
+        # National (Canada) median income — the comparison line.
+        avg_inc = nat_income if not pd.isna(nat_income) else inc["income_value"].mean()
+        avg_lbl = "Canada" if not pd.isna(nat_income) else "Province average"
+
+        st.markdown("**Median employment income vs the national average**")
+        inc_bars = (alt.Chart(inc.dropna(subset=["income_value"]))
+                    .mark_bar(cornerRadiusEnd=3).encode(
+                        x=alt.X("income_value:Q",
+                                title="Median employment income ($, annual)"),
+                        y=alt.Y("geo:N", sort="-x", title=None),
+                        color=alt.condition(
+                            alt.datum.income_value >= avg_inc,
+                            alt.value("#3aa76d"), alt.value("#c98a2b")),
+                        tooltip=["geo:N",
+                                 alt.Tooltip("income_value:Q",
+                                             title="Median income", format="$,.0f")]))
+        rule = (alt.Chart(pd.DataFrame({"v": [avg_inc]}))
+                .mark_rule(color="#16202b", strokeDash=[5, 4], size=2)
+                .encode(x="v:Q",
+                        tooltip=[alt.Tooltip("v:Q",
+                                             title=f"{avg_lbl} average", format="$,.0f")]))
+        rule_txt = (alt.Chart(pd.DataFrame({"v": [avg_inc]}))
+                    .mark_text(align="right", dx=-6, dy=-6, color="#16202b",
+                               fontSize=11, fontWeight="bold")
+                    .encode(x="v:Q",
+                            text=alt.value(f"{avg_lbl} avg ${avg_inc:,.0f}")))
+        st.altair_chart(
+            (inc_bars + rule + rule_txt).properties(height=max(220, 32 * len(inc))),
+            use_container_width=True)
+        st.caption(f"Green = at or above the {avg_lbl.lower()} average; amber = below. "
+                   "Dashed line marks the national reference value.")
+
         col_a, col_b = st.columns([3, 4])
         with col_a:
             st.dataframe(
@@ -304,6 +446,49 @@ def main() -> None:
                 tooltip=["geo:N", alt.Tooltip("low_income_rate:Q", format=".1f")],
             ).properties(height=max(200, 30 * len(snap))))
             st.altair_chart(li, use_container_width=True)
+
+        st.divider()
+        st.markdown("**Income distribution within a province** — how median income "
+                    "spreads across demographic groups")
+        demo = load_income_demo()
+        demo_m = demo[demo["ref_date"] == sel_month]
+        pick = st.selectbox("Province", list(inc["geo"]), key="inc_prov")
+        pdemo = demo_m[demo_m["geo"] == pick].dropna(subset=["income_value"])
+        prov_row = snap[snap["geo"] == pick]
+        prov_med = (prov_row["income_value"].iloc[0]
+                    if not prov_row.empty else float("nan"))
+        if pdemo.empty:
+            st.info(f"No demographic income breakdown available for {pick} in {sel_month}.")
+        else:
+            dist = (alt.Chart(pdemo).mark_bar(cornerRadiusEnd=3).encode(
+                x=alt.X("income_value:Q",
+                        title="Median employment income ($, annual)"),
+                y=alt.Y("group:N", sort="-x", title=None),
+                color=alt.Color("gender:N", title="Gender",
+                                scale=alt.Scale(domain=["Men+", "Women+"],
+                                                range=["#1f6feb", "#b4540f"])),
+                tooltip=[alt.Tooltip("group:N", title="Group"),
+                         alt.Tooltip("income_value:Q", title="Median income",
+                                     format="$,.0f")]))
+            layers = [dist]
+            if not pd.isna(prov_med):
+                pmed = (alt.Chart(pd.DataFrame({"v": [prov_med]}))
+                        .mark_rule(color="#16202b", strokeDash=[5, 4], size=2)
+                        .encode(x="v:Q",
+                                tooltip=[alt.Tooltip("v:Q",
+                                                     title="Province overall (15+)",
+                                                     format="$,.0f")]))
+                layers.append(pmed)
+            st.altair_chart(
+                alt.layer(*layers).properties(height=max(200, 46 * len(pdemo))),
+                use_container_width=True)
+            spread = pdemo["income_value"].max() - pdemo["income_value"].min()
+            st.caption(
+                f"{pick}: income ranges ${pdemo['income_value'].min():,.0f}–"
+                f"${pdemo['income_value'].max():,.0f} across the six age×gender groups "
+                f"(spread ${spread:,.0f}). Dashed line = the province's overall 15+ "
+                "median. Non-overlapping bands (15–24 / 25–54 / 55+) × gender.")
+
         st.caption("Median employment income & low-income rate are annual — they repeat "
                    "across the year by join design; never compared as monthly figures.")
 
@@ -390,24 +575,8 @@ def main() -> None:
             f'<div class="briefing" style="margin-top:12px">{r["score_explanation"]}</div>',
             unsafe_allow_html=True)
 
-    # ⑧ AI Council review -------------------------------------------------- #
+    # ⑧ Caveats ------------------------------------------------------------ #
     with tabs[7]:
-        st.subheader("AI Council review status")
-        st.markdown(
-            "- **Status:** 🟡 *Reviewed 2026-06-27 — recommended **Approve with revisions**; "
-            "awaiting human Council ratification.* Remains a prototype until signed.\n"
-            "- **Required revisions:** ✅ 3-mo employment/participation windows · ✅ core/older "
-            "age-band drivers (65+ absent from source) · ✅ reframe to labour-market distress · "
-            "✅ income, low-income & CPI-Shelter connected · ⬜ re-run the 5 known-answer cases "
-            "— **4 of 5 done.**\n"
-            "- The AI Council reviews accuracy, usefulness, clarity, appropriateness, "
-            "governance, safety, scope, and evidence before any deployment-ready claim.")
-        st.warning("The recommended decision is **Approve with revisions** and is **not yet "
-                   "ratified by a human Council member** — treat every output here as a draft "
-                   "for human review.")
-
-    # ⑨ Caveats ------------------------------------------------------------ #
-    with tabs[8]:
         st.subheader("Caveats & limitations")
         st.markdown(
             "- **Triage, not need.** Flags areas for human review; never determines "

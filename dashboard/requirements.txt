@@ -4,3 +4,6 @@
 streamlit>=1.40
 pandas>=2.0
 altair>=5.0
+# Renders the Canada choropleth server-side — Streamlit's browser Vega drops inline
+# GeoJSON geometry, so the map is rasterised with vl-convert instead.
+vl-convert-python>=1.0
