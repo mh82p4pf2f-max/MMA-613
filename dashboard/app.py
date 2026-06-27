@@ -28,6 +28,7 @@ Reads: Knowledge/synthetic/policy_triage_panel_SYNTHETIC.csv (per-group panel).
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -35,6 +36,10 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 SYN_PANEL = ROOT / "Knowledge" / "synthetic" / "policy_triage_panel_SYNTHETIC.csv"
+
+# Reuse the real scoring engine so the on-screen score breakdown matches the score exactly
+sys.path.insert(0, str(ROOT / "Knowledge" / "src"))
+import scoring  # noqa: E402
 
 st.set_page_config(
     page_title="Labour Market Stress — Policy Triage",
@@ -60,6 +65,22 @@ AGE_LABELS = {
     "55 years and over": "Older (55+)",
 }
 GENDER_LABELS = {"Total - Gender": "all genders", "Men+": "men", "Women+": "women"}
+
+# Citations — every indicator traces to a public Statistics Canada table.
+STATCAN_URL = "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid="
+SOURCES = [
+    ("14-10-0287-01", "1410028701", "Labour force characteristics (LFS)",
+     "Unemployment, employment, participation & youth rates — the spine"),
+    ("11-10-0135-01", "1110013501", "Low income statistics",
+     "Low-income rate (LIM-AT) — the largest scoring factor"),
+    ("18-10-0004-01", "1810000401", "Consumer Price Index, incl. Shelter",
+     "Shelter-cost pressure proxy (year-over-year Shelter CPI)"),
+    ("11-10-0239-01", "1110023901", "Income of individuals",
+     "Median employment income context"),
+    ("17-10-0005-01", "1710000501", "Population estimates (July 1)",
+     "Population denominators & context"),
+]
+LFS_LINK = f"[Statistics Canada LFS 14-10-0287-01]({STATCAN_URL}1410028701)"
 
 
 def inject_css() -> None:
@@ -109,6 +130,7 @@ def inject_css() -> None:
               text-transform:uppercase; color:#8a94a3; margin-bottom:4px; }
           .driver-val { font-size:1.25rem; font-weight:650; color:#1b2533; }
           .hero-foot { margin-top:16px; font-size:0.8rem; color:#8a94a3; }
+          .hero-foot a { color:#1b2a4a; text-decoration:underline; }
 
           .chip { display:inline-flex; align-items:center; gap:6px; font-size:0.8rem;
               font-weight:600; padding:4px 12px; border-radius:999px; }
@@ -125,6 +147,16 @@ def inject_css() -> None:
           .verdict { background:#fbf3e0; border:1px solid #ecdcb0; border-radius:12px;
               padding:16px 20px; margin:6px 0 14px; color:#6b5417; }
           .verdict b { color:#7a5e12; }
+
+          .find-card { background:#fff; border:1px solid rgba(27,42,74,0.10);
+              border-left:4px solid #1b2a4a; border-radius:12px; padding:16px 20px; margin:0 0 14px;
+              box-shadow:0 1px 2px -1px rgba(27,42,74,0.08); }
+          .find-eyebrow { font-size:0.72rem; font-weight:600; letter-spacing:0.06em;
+              text-transform:uppercase; color:#8a94a3; margin-bottom:6px; }
+          .find-head { font-size:1.08rem; font-weight:650; color:#1b2533; margin-bottom:5px;
+              line-height:1.3; }
+          .find-detail { font-size:0.92rem; color:#5b6675; line-height:1.55; }
+          .find-detail b { color:#1b2533; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -149,6 +181,97 @@ def clean_expl(text):
     if not isinstance(text, str):
         return text
     return re.sub(r"\s*\[SYNTHETIC DEMO DATA[^\]]*\]", "", text).strip()
+
+
+def score_contributions(row: pd.Series) -> pd.DataFrame:
+    """How many of the area's score points come from each factor, using the real
+    scoring math (normalise vs anchors → weight → renormalise on available weight).
+    The points sum to the area's policy_review_priority_score."""
+    parts, avail = {}, 0.0
+    for comp, col in scoring.COMPONENT_SOURCE.items():
+        raw = row.get(col)
+        if comp in ("emp_decline", "part_decline") and pd.notna(raw):
+            raw = -raw  # a decline is stress
+        n = scoring._norm(raw, *scoring.ANCHORS[comp])
+        if pd.notna(n):
+            parts[scoring.LABELS.get(comp, comp).title()] = scoring.WEIGHTS[comp] * n
+            avail += scoring.WEIGHTS[comp]
+    if avail == 0:
+        return pd.DataFrame(columns=["points"])
+    data = {k: 100.0 * v / avail for k, v in parts.items()}
+    return pd.DataFrame({"points": data}).sort_values("points", ascending=False)
+
+
+def key_findings(df: pd.DataFrame, month: str) -> list[dict]:
+    """Scan every province and demographic group for the month and surface the most
+    specific, notable facts. Each finding is grounded in a real panel value — nothing
+    invented. Returns a list of {eyebrow, head, detail}."""
+    out: list[dict] = []
+    snap = df[df["ref_date"] == month]
+    prov = snap[(snap["gender"] == "Total - Gender") &
+                (snap["age_group"] == "15 years and over") & (snap["geo"] != "Canada")]
+    canada = snap[(snap["gender"] == "Total - Gender") &
+                  (snap["age_group"] == "15 years and over") & (snap["geo"] == "Canada")]
+    if prov.empty:
+        return out
+    natl_li = canada["low_income_rate"].mean() if not canada.empty else float("nan")
+
+    # 1 — Top priority area
+    t = prov.sort_values("policy_review_priority_score", ascending=False).iloc[0]
+    out.append({"eyebrow": "📍 Top area to review",
+                "head": f"{t.geo} leads the priority ranking",
+                "detail": f"Priority score <b>{t.policy_review_priority_score:.0f}/100</b> — "
+                          "the first place to look this cycle."})
+
+    # 2 — Highest low-income rate (the largest scoring factor)
+    if prov["low_income_rate"].notna().any():
+        t = prov.sort_values("low_income_rate", ascending=False).iloc[0]
+        extra = (f", <b>{t.low_income_rate - natl_li:+.1f} pp</b> vs the national {natl_li:.1f}%"
+                 if pd.notna(natl_li) else "")
+        out.append({"eyebrow": "💲 Highest income hardship",
+                    "head": f"{t.geo} has the highest low-income rate",
+                    "detail": f"Low-income rate <b>{t.low_income_rate:.1f}%</b>{extra}. "
+                              "Low-income is the largest single factor in the score."})
+
+    # 3 — Lowest youth earnings (e.g. "youth in Alberta earn way lower")
+    youth = snap[(snap["age_group"] == "15 to 24 years") &
+                 (snap["gender"] == "Total - Gender") & (snap["geo"] != "Canada")]
+    if not youth.empty and youth["income_value"].notna().any():
+        lo = youth.sort_values("income_value").iloc[0]
+        med = youth["income_value"].median()
+        pct = abs(lo.income_value / med - 1) * 100 if med else 0
+        out.append({"eyebrow": "🧑 Lowest youth earnings",
+                    "head": f"Young people in {lo.geo} earn the least",
+                    "detail": f"Median youth (15–24) employment income <b>${lo.income_value:,.0f}</b> — "
+                              f"the lowest of any province, about <b>{pct:.0f}% below</b> the "
+                              f"${med:,.0f} provincial median."})
+
+    # 4 — Widest youth disadvantage (youth vs overall unemployment gap)
+    if prov["youth_unemployment_rate"].notna().any():
+        p = prov.copy()
+        p["gap"] = p["youth_unemployment_rate"] - p["unemployment_rate"]
+        t = p.sort_values("gap", ascending=False).iloc[0]
+        out.append({"eyebrow": "⚠️ Widest youth disadvantage",
+                    "head": f"Youth struggle most in {t.geo}",
+                    "detail": f"Youth unemployment <b>{t.youth_unemployment_rate:.1f}%</b> vs "
+                              f"{t.unemployment_rate:.1f}% overall — a <b>{t.gap:.1f} pp</b> gap."})
+
+    # 5 — Fastest-rising unemployment
+    if prov["unemp_change"].notna().any():
+        t = prov.sort_values("unemp_change", ascending=False).iloc[0]
+        if pd.notna(t.unemp_change) and t.unemp_change > 0:
+            out.append({"eyebrow": "📈 Rising fastest",
+                        "head": f"Unemployment is climbing quickest in {t.geo}",
+                        "detail": f"Up <b>{t.unemp_change:+.1f} pp</b> versus its 12-month average."})
+
+    # 6 — Steepest shelter-cost pressure
+    if prov["housing_pressure_proxy"].notna().any():
+        t = prov.sort_values("housing_pressure_proxy", ascending=False).iloc[0]
+        out.append({"eyebrow": "🏠 Steepest housing pressure",
+                    "head": f"{t.geo} faces the highest shelter-cost pressure",
+                    "detail": f"Shelter CPI up <b>{t.housing_pressure_proxy:.1f}%</b> year-over-year "
+                              "(a proxy, not a measured affordability rate)."})
+    return out
 
 
 @st.cache_data
@@ -232,8 +355,8 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
             <div><span class="driver-label">Employment</span>
                  <span class="driver-val">{fmt(top.get("employment_rate"), "%")}</span></div>
           </div>
-          <div class="hero-foot">Source: Statistics Canada LFS 14-10-0287-01 ·
-          Triage signal only — not an eligibility or benefit decision.</div>
+          <div class="hero-foot">Source: <a href="{STATCAN_URL}1410028701" target="_blank">Statistics
+          Canada LFS 14-10-0287-01</a> · Triage signal only — not an eligibility or benefit decision.</div>
         </div>''',
         unsafe_allow_html=True,
     )
@@ -272,6 +395,8 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
             "unemployment_rate": st.column_config.NumberColumn("Unemployment %", format="%.1f"),
         },
     )
+    st.caption("📑 Full data sources with clickable Statistics Canada links are in the "
+               "**Governance & caveats** tab.")
 
 
 def main() -> None:
@@ -318,21 +443,48 @@ def main() -> None:
     snap_focus = snap[snap["geo"] != "Canada"]          # Canada = baseline, not a focus area
     view = base                                          # full history for the chosen slice
 
-    tabs = st.tabs(["Start here", "Why — the drivers", "Score & evidence", "Governance & caveats"])
+    tabs = st.tabs(["Start here", "Key findings", "Why — the drivers",
+                    "Score & evidence", "Governance & caveats"])
 
     # 1 — Start here
     with tabs[0]:
         render_decision(snap_focus, sel_month, slice_label)
 
-    # 2 — Why: the drivers (regional + demographic + income/housing folded in)
+    # 2 — Key findings (auto-generated, scans all groups for the selected month)
     with tabs[1]:
+        st.subheader(f"Key findings — {sel_month}")
+        st.caption("Auto-generated from the full panel — every province, age band and gender — for "
+                   "the selected month. Each finding is a claim to verify against the Statistics "
+                   "Canada source, not a program decision.")
+        findings = key_findings(df, sel_month)
+        if not findings:
+            st.info("No findings for this month.")
+        else:
+            cols = st.columns(2)
+            for i, f in enumerate(findings):
+                with cols[i % 2]:
+                    st.markdown(
+                        f'<div class="find-card">'
+                        f'<div class="find-eyebrow">{f["eyebrow"]}</div>'
+                        f'<div class="find-head">{f["head"]}</div>'
+                        f'<div class="find-detail">{f["detail"]}</div>'
+                        f'</div>', unsafe_allow_html=True)
+
+    # 3 — Why: the drivers (income lead, then labour, demographic, housing — all open)
+    with tabs[2]:
         st.subheader("Why these areas — the drivers")
-        st.markdown("**Priority score by area**")
-        rank = snap_focus.sort_values("policy_review_priority_score", ascending=False)
-        st.bar_chart(rank.set_index("geo")["policy_review_priority_score"], color=NAVY)
+
+        st.markdown("**Low-income rate by area ★** — the largest factor in the score")
+        inc_rank = snap_focus.sort_values("low_income_rate", ascending=False)
+        st.bar_chart(inc_rank.set_index("geo")["low_income_rate"], color=NAVY)
 
         st.markdown("**Unemployment rate over time**")
         st.line_chart(view.pivot_table(index="date", columns="geo", values="unemployment_rate"))
+
+        st.markdown("**Housing / affordability pressure over time (proxy)**")
+        st.caption("Proxy = year-over-year growth in the Shelter CPI (18-10-0004-01). Not a measured "
+                   "affordability or core-housing-need rate. Feeds 0.10 of the score.")
+        st.line_chart(view.pivot_table(index="date", columns="geo", values="housing_pressure_proxy"))
 
         st.markdown("#### Demographic breakdown")
         st.caption("Unemployment by age band for the selected month — overall (15+), youth (15–24), "
@@ -344,45 +496,31 @@ def main() -> None:
         st.dataframe(demo.sort_values(demo.columns[0], ascending=False) if len(demo.columns) else demo,
                      use_container_width=True)
 
-        with st.expander("Income context (annual)"):
-            cols = [c for c in ("geo", "income_value", "low_income_rate") if c in snap_focus]
-            st.dataframe(snap_focus[cols].sort_values("income_value", ascending=False)
-                         if "income_value" in snap_focus else snap_focus[cols],
-                         use_container_width=True, hide_index=True)
-            st.caption("Median employment income & low-income rate (LIM-AT) — annual values, "
-                       "repeated across the year by join design. Low-income feeds **0.25** of the "
-                       "score — the largest single factor.")
-        with st.expander("Housing / affordability pressure (proxy)"):
-            st.caption("Proxy = year-over-year growth in the Shelter CPI (18-10-0004-01). Not a "
-                       "measured affordability or core-housing-need rate. Feeds 0.10 of the score.")
-            st.line_chart(view.pivot_table(index="date", columns="geo", values="housing_pressure_proxy"))
+        st.markdown("#### Income detail (annual)")
+        cols = [c for c in ("geo", "income_value", "low_income_rate") if c in snap_focus]
+        st.dataframe(
+            snap_focus[cols].sort_values("low_income_rate", ascending=False)
+            if "low_income_rate" in snap_focus else snap_focus[cols],
+            use_container_width=True, hide_index=True,
+            column_config={
+                "geo": st.column_config.TextColumn("Geography", width="medium"),
+                "income_value": st.column_config.NumberColumn("Median income $", format="%.0f"),
+                "low_income_rate": st.column_config.NumberColumn("Low-income % ★", format="%.1f"),
+            })
+        st.caption("Median employment income & low-income rate (LIM-AT) — annual values, repeated "
+                   "across the year by join design. Low-income feeds 0.25 of the score (the largest factor).")
 
-    # 3 — Score & evidence
-    with tabs[2]:
+    # 4 — Score & evidence
+    with tabs[3]:
         st.subheader("The score & the evidence behind it")
         st.caption("A 0–100 triage score. **Low-income rate is the largest factor (0.25)**, then "
                    "unemployment level (0.22) & 12-mo change (0.13), employment & participation "
                    "decline (0.10 each), youth unemployment (0.10), housing-cost pressure (0.10). "
                    "Missing inputs lower confidence — they are never filled in.")
 
-        st.markdown("**Every area, with the inputs that drive the score**")
-        tbl = snap_focus.sort_values("policy_review_priority_score", ascending=False)[
-            ["geo", "policy_review_priority_score", "confidence_flag",
-             "low_income_rate", "unemployment_rate", "youth_unemployment_rate"]].copy()
-        tbl["confidence_flag"] = tbl["confidence_flag"].astype(str).str.capitalize()
-        st.dataframe(tbl, use_container_width=True, hide_index=True,
-            column_config={
-                "geo": st.column_config.TextColumn("Geography", width="medium"),
-                "policy_review_priority_score": st.column_config.ProgressColumn(
-                    "Priority score", format="%.0f", min_value=0, max_value=100),
-                "confidence_flag": st.column_config.TextColumn("Confidence", width="small"),
-                "low_income_rate": st.column_config.NumberColumn("Low-income % ★", format="%.1f"),
-                "unemployment_rate": st.column_config.NumberColumn("Unemployment %", format="%.1f"),
-                "youth_unemployment_rate": st.column_config.NumberColumn("Youth unemp. %", format="%.1f"),
-            })
-
-        st.markdown("#### Look at one area")
-        g = st.selectbox("Geography", sorted(snap_focus["geo"].unique()))
+        # ---- Break one area down: the chart that explains the score ----
+        st.markdown("#### What builds an area's score")
+        g = st.selectbox("Area to break down", sorted(snap_focus["geo"].unique()))
         row = snap_focus[snap_focus["geo"] == g]
         if not row.empty:
             r = row.iloc[0]
@@ -391,16 +529,44 @@ def main() -> None:
             c2.metric("Low-income rate ★", fmt(r.get("low_income_rate"), "%"))
             c3.metric("Unemployment", fmt(r.get("unemployment_rate"), "%"))
             c4.metric("Youth unemp.", fmt(r.get("youth_unemployment_rate"), "%"))
+
+            contrib = score_contributions(r)
+            if not contrib.empty:
+                st.markdown(f"**Where {g}'s {r['policy_review_priority_score']:.0f} points come from** "
+                            "— each factor's contribution to the score:")
+                st.bar_chart(contrib, y="points", horizontal=True, color=NAVY)
             conf = r.get("score_confidence")
             conf_pct = f"{conf:.0%}" if pd.notna(conf) else "—"
             st.caption(
                 f"Confidence: **{str(r.get('confidence_flag', '—')).capitalize()}** "
                 f"({conf_pct} of the score's weight backed by data). "
-                f"Source: Statistics Canada LFS 14-10-0287-01 (province-level). "
+                f"Source: {LFS_LINK} (province-level). "
                 f"Triage signal only — not an eligibility or benefit decision.")
 
-    # 4 — Governance & caveats
-    with tabs[3]:
+        # ---- Compare every area (with in-cell bars, not a bland grid) ----
+        st.divider()
+        st.markdown("#### Compare every area")
+        tbl = snap_focus.sort_values("policy_review_priority_score", ascending=False)[
+            ["geo", "policy_review_priority_score", "confidence_flag",
+             "low_income_rate", "unemployment_rate", "youth_unemployment_rate"]].copy()
+        tbl["confidence_flag"] = tbl["confidence_flag"].astype(str).str.capitalize()
+        li_max = float(tbl["low_income_rate"].max()) if tbl["low_income_rate"].notna().any() else 25.0
+        un_max = float(tbl["unemployment_rate"].max()) if tbl["unemployment_rate"].notna().any() else 20.0
+        st.dataframe(tbl, use_container_width=True, hide_index=True,
+            column_config={
+                "geo": st.column_config.TextColumn("Geography", width="medium"),
+                "policy_review_priority_score": st.column_config.ProgressColumn(
+                    "Priority score", format="%.0f", min_value=0, max_value=100),
+                "confidence_flag": st.column_config.TextColumn("Confidence", width="small"),
+                "low_income_rate": st.column_config.ProgressColumn(
+                    "Low-income % ★", format="%.1f", min_value=0, max_value=li_max),
+                "unemployment_rate": st.column_config.ProgressColumn(
+                    "Unemployment %", format="%.1f", min_value=0, max_value=un_max),
+                "youth_unemployment_rate": st.column_config.NumberColumn("Youth unemp. %", format="%.1f"),
+            })
+
+    # 5 — Governance & caveats
+    with tabs[4]:
         st.subheader("AI Council review")
         st.markdown(
             '<div class="verdict"><b>Verdict: 🟡 Approve with revisions</b> — reviewed 2026-06-27, '
@@ -427,6 +593,16 @@ def main() -> None:
             "- **Missing data flagged**, never imputed; it lowers confidence.\n"
             "- **Claims, not facts.** Claude-drafted summaries require analyst + AI Council review.\n\n"
             "Full detail: `Knowledge/metadata/integration_notes.md`.")
+
+        st.subheader("Data sources & citations")
+        st.caption("Every indicator traces to an aggregate, public Statistics Canada table. "
+                   "Click a product ID to open the source table on statcan.gc.ca.")
+        src_lines = ["| Statistics Canada table | What it provides in this dashboard |", "|---|---|"]
+        for pid_disp, pid, title, role in SOURCES:
+            src_lines.append(f"| [**{pid_disp}** · {title}]({STATCAN_URL}{pid}) | {role} |")
+        st.markdown("\n".join(src_lines))
+        st.caption("Aggregate public data only — no individual records, no city/CMA detail. "
+                   "Full source notes: `Knowledge/metadata/data_sources.md`.")
 
 
 if __name__ == "__main__":
