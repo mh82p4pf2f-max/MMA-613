@@ -1,0 +1,13 @@
+# Theme — "Government data room" direction for the Labour Market Stress dashboard.
+# Calm, official, trustworthy: deep federal navy + soft slate neutrals, white cards
+# on a light canvas. Amber is reserved for caution/confidence only (set in app CSS).
+[theme]
+base = "light"
+primaryColor = "#1b2a4a"            # deep federal navy — links, slider, focus
+backgroundColor = "#f5f6f8"         # soft slate canvas
+secondaryBackgroundColor = "#ffffff" # sidebar + widgets read as white cards
+textColor = "#1b2533"               # near-navy ink
+font = "sans serif"
+
+[server]
+headless = true

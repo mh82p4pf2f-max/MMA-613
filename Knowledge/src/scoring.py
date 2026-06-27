@@ -26,12 +26,12 @@ import pandas as pd
 
 # Component weights — explicit and editable so the AI Council can review them.
 WEIGHTS = {
-    "unemp_level": 0.30,      # unemployment rate level
-    "unemp_change": 0.15,     # rise vs trailing 12-mo average
+    "unemp_level": 0.22,      # unemployment rate level (trimmed 0.30->0.22 to lift income)
+    "unemp_change": 0.13,     # rise vs trailing 12-mo average (trimmed 0.15->0.13)
     "emp_decline": 0.10,      # fall in employment rate vs 12-mo average
     "part_decline": 0.10,     # fall in participation rate vs 12-mo average
     "youth_unemp": 0.10,      # youth (15-24) unemployment rate
-    "low_income": 0.15,       # low-income rate (annual context, if available)
+    "low_income": 0.25,       # low-income rate — now the largest factor (raised 0.15->0.25)
     "housing_pressure": 0.10, # shelter-CPI YoY pressure PROXY (if available)
 }
 
