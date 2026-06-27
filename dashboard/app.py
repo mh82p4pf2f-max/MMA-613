@@ -176,15 +176,16 @@ def build_briefing(top: pd.Series, month: str, slice_label: str | None) -> str:
     geo = top["geo"]
     score = top["policy_review_priority_score"]
     flag = str(top.get("confidence_flag", "—")).lower()
+    lowinc = fmt(top.get("low_income_rate"), "%")
     unemp = fmt(top.get("unemployment_rate"), "%")
     youth = fmt(top.get("youth_unemployment_rate"), "%")
 
     who = f"{slice_label} in {geo}" if slice_label else geo
     body = (
         f"<b>This cycle ({month}), the first area to review is {who}.</b> "
-        f"It carries the highest policy-review priority score, <b>{score:.0f}/100</b> — "
-        f"the steepest labour-market stress in this view, driven by an unemployment rate of "
-        f"<b>{unemp}</b> and youth (15–24) unemployment of <b>{youth}</b>. "
+        f"It carries the highest policy-review priority score, <b>{score:.0f}/100</b> — led by its "
+        f"<b>low-income rate of {lowinc}</b> (the heaviest-weighted factor), alongside an "
+        f"unemployment rate of <b>{unemp}</b> and youth (15–24) unemployment of <b>{youth}</b>. "
         f"Confidence is <b>{flag}</b>. "
         f"Source: Statistics Canada Labour Force Survey 14-10-0287-01 (province-level — no city detail). "
         f"This is a triage signal — an area for closer human policy review, "
@@ -222,14 +223,14 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
             </div>
           </div>
           <div class="hero-drivers">
+            <div><span class="driver-label">Low-income rate ★</span>
+                 <span class="driver-val">{fmt(top.get("low_income_rate"), "%")}</span></div>
             <div><span class="driver-label">Unemployment</span>
                  <span class="driver-val">{fmt(top.get("unemployment_rate"), "%")}</span></div>
             <div><span class="driver-label">Youth (15–24)</span>
                  <span class="driver-val">{fmt(top.get("youth_unemployment_rate"), "%")}</span></div>
             <div><span class="driver-label">Employment</span>
                  <span class="driver-val">{fmt(top.get("employment_rate"), "%")}</span></div>
-            <div><span class="driver-label">Participation</span>
-                 <span class="driver-val">{fmt(top.get("participation_rate"), "%")}</span></div>
           </div>
           <div class="hero-foot">Source: Statistics Canada LFS 14-10-0287-01 ·
           Triage signal only — not an eligibility or benefit decision.</div>
@@ -254,7 +255,7 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
                "score; missing inputs lower confidence, never the score. Canada is a national "
                "baseline and is excluded from the focus ranking.")
     shortlist = ranked[["geo", "policy_review_priority_score", "confidence_flag",
-                        "unemployment_rate", "youth_unemployment_rate"]].copy()
+                        "low_income_rate", "unemployment_rate"]].copy()
     shortlist.insert(0, "rank", range(1, len(shortlist) + 1))
     shortlist["confidence_flag"] = shortlist["confidence_flag"].astype(str).str.capitalize()
     st.dataframe(
@@ -266,8 +267,9 @@ def render_decision(snap_focus: pd.DataFrame, month: str, slice_label: str | Non
                 "Priority score", format="%.0f", min_value=0, max_value=100,
                 help="0–100, higher = review sooner"),
             "confidence_flag": st.column_config.TextColumn("Confidence", width="small"),
+            "low_income_rate": st.column_config.NumberColumn("Low-income % ★", format="%.1f",
+                help="Largest factor in the score"),
             "unemployment_rate": st.column_config.NumberColumn("Unemployment %", format="%.1f"),
-            "youth_unemployment_rate": st.column_config.NumberColumn("Youth unemp. %", format="%.1f"),
         },
     )
 
@@ -357,41 +359,45 @@ def main() -> None:
 
     # 3 — Score & evidence
     with tabs[2]:
-        st.subheader("How the priority score is built")
-        st.markdown(
-            "A transparent **0–100** triage score, each input normalised against fixed, documented "
-            "anchors and weighted:\n"
-            "- **Low-income rate 0.25** — the largest single factor\n"
-            "- Unemployment level **0.22**, 12-mo change **0.13**\n"
-            "- Employment decline vs 3-mo avg **0.10**, participation decline vs 3-mo avg **0.10**\n"
-            "- Youth unemployment **0.10**, shelter-cost pressure **0.10**\n\n"
-            "**Missing inputs lower confidence; they are never filled in.** Confidence = the share of "
-            "weight backed by real data (≥0.85 high · 0.55–0.85 medium · <0.55 low).")
-        disp = snap_focus.sort_values("policy_review_priority_score", ascending=False)[
-            ["geo", "policy_review_priority_score", "score_confidence",
-             "confidence_flag", "score_explanation"]].copy()
-        disp["score_explanation"] = disp["score_explanation"].map(clean_expl)
-        st.dataframe(disp, use_container_width=True, hide_index=True,
-                     column_config={"geo": "Geography",
-                                    "policy_review_priority_score": st.column_config.NumberColumn("Score", format="%.0f"),
-                                    "score_confidence": st.column_config.NumberColumn("Confidence (0–1)", format="%.2f"),
-                                    "confidence_flag": "Flag",
-                                    "score_explanation": "Explanation"})
+        st.subheader("The score & the evidence behind it")
+        st.caption("A 0–100 triage score. **Low-income rate is the largest factor (0.25)**, then "
+                   "unemployment level (0.22) & 12-mo change (0.13), employment & participation "
+                   "decline (0.10 each), youth unemployment (0.10), housing-cost pressure (0.10). "
+                   "Missing inputs lower confidence — they are never filled in.")
 
-        st.markdown("#### Evidence panel")
+        st.markdown("**Every area, with the inputs that drive the score**")
+        tbl = snap_focus.sort_values("policy_review_priority_score", ascending=False)[
+            ["geo", "policy_review_priority_score", "confidence_flag",
+             "low_income_rate", "unemployment_rate", "youth_unemployment_rate"]].copy()
+        tbl["confidence_flag"] = tbl["confidence_flag"].astype(str).str.capitalize()
+        st.dataframe(tbl, use_container_width=True, hide_index=True,
+            column_config={
+                "geo": st.column_config.TextColumn("Geography", width="medium"),
+                "policy_review_priority_score": st.column_config.ProgressColumn(
+                    "Priority score", format="%.0f", min_value=0, max_value=100),
+                "confidence_flag": st.column_config.TextColumn("Confidence", width="small"),
+                "low_income_rate": st.column_config.NumberColumn("Low-income % ★", format="%.1f"),
+                "unemployment_rate": st.column_config.NumberColumn("Unemployment %", format="%.1f"),
+                "youth_unemployment_rate": st.column_config.NumberColumn("Youth unemp. %", format="%.1f"),
+            })
+
+        st.markdown("#### Look at one area")
         g = st.selectbox("Geography", sorted(snap_focus["geo"].unique()))
         row = snap_focus[snap_focus["geo"] == g]
         if not row.empty:
-            keep = ("geo", "ref_date", "unemployment_rate", "employment_rate", "participation_rate",
-                    "youth_unemployment_rate", "unemp_change", "emp_change", "part_change",
-                    "low_income_rate", "housing_pressure_proxy",
-                    "policy_review_priority_score", "score_confidence", "confidence_flag",
-                    "missing_value_flag", "score_explanation", "source_product_id_lfs")
-            ev = {k: (None if pd.isna(v) else v) for k, v in row.iloc[0].to_dict().items() if k in keep}
-            if "score_explanation" in ev:
-                ev["score_explanation"] = clean_expl(ev["score_explanation"])
-            st.json(ev)
-        st.caption("Source: Statistics Canada LFS 14-10-0287-01. See Knowledge/metadata/data_sources.md.")
+            r = row.iloc[0]
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Priority score", f"{r['policy_review_priority_score']:.0f}/100")
+            c2.metric("Low-income rate ★", fmt(r.get("low_income_rate"), "%"))
+            c3.metric("Unemployment", fmt(r.get("unemployment_rate"), "%"))
+            c4.metric("Youth unemp.", fmt(r.get("youth_unemployment_rate"), "%"))
+            conf = r.get("score_confidence")
+            conf_pct = f"{conf:.0%}" if pd.notna(conf) else "—"
+            st.caption(
+                f"Confidence: **{str(r.get('confidence_flag', '—')).capitalize()}** "
+                f"({conf_pct} of the score's weight backed by data). "
+                f"Source: Statistics Canada LFS 14-10-0287-01 (province-level). "
+                f"Triage signal only — not an eligibility or benefit decision.")
 
     # 4 — Governance & caveats
     with tabs[3]:
